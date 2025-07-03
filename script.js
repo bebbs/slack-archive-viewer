@@ -89,18 +89,32 @@ class SlackArchiveViewer {
 
         this.renderChannels();
         this.hideLoading();
+        
+        // Auto-select the first channel if available
+        if (this.channels.length > 0) {
+            this.selectChannel(this.channels[0]);
+        }
     }
 
     async loadMessageFiles(files) {
         this.messages = {};
+        
+        // Debug: Log all files to see what we're working with
+        console.log('Total files loaded:', files.length);
         
         // Group message files by channel
         const messageFiles = files.filter(f => 
             f.name.endsWith('.json') && 
             f.name !== 'channels.json' && 
             f.name !== 'users.json' &&
+            f.name !== 'huddle_transcripts.json' &&
+            f.name !== 'integration_logs.json' &&
+            f.name !== 'canvases.json' &&
+            f.name !== 'lists.json' &&
             f.webkitRelativePath.includes('/')
         );
+
+        console.log('Message files found:', messageFiles.length);
 
         const channelFiles = {};
         messageFiles.forEach(file => {
@@ -113,13 +127,17 @@ class SlackArchiveViewer {
             channelFiles[channelName].push(file);
         });
 
+        console.log('Channels with message files:', Object.keys(channelFiles));
+
         // Load messages for each channel
         for (const [channelName, channelFileList] of Object.entries(channelFiles)) {
+            console.log(`Loading messages for #${channelName} from ${channelFileList.length} files`);
             this.messages[channelName] = [];
             
             for (const file of channelFileList) {
                 try {
                     const fileMessages = await this.parseJsonFile(file);
+                    console.log(`Loaded ${fileMessages.length} messages from ${file.name}`);
                     this.messages[channelName].push(...fileMessages);
                 } catch (error) {
                     console.warn(`Failed to load messages from ${file.name}:`, error);
@@ -128,6 +146,7 @@ class SlackArchiveViewer {
             
             // Sort messages by timestamp
             this.messages[channelName].sort((a, b) => parseFloat(a.ts) - parseFloat(b.ts));
+            console.log(`Total messages in #${channelName}: ${this.messages[channelName].length}`);
         }
     }
 
@@ -190,6 +209,8 @@ class SlackArchiveViewer {
         const messageContainer = document.getElementById('messageContainer');
         let messages = this.messages[channelName] || [];
         
+        console.log(`Rendering messages for #${channelName}: ${messages.length} total messages`);
+        
         if (messages.length === 0) {
             messageContainer.innerHTML = '<div class="welcome-message"><p>No messages found in this channel.</p></div>';
             return;
@@ -201,6 +222,8 @@ class SlackArchiveViewer {
                 const searchText = this.getSearchableText(message).toLowerCase();
                 return searchText.includes(this.searchQuery);
             });
+            
+            console.log(`After search filter: ${messages.length} messages`);
             
             if (messages.length === 0) {
                 messageContainer.innerHTML = `
@@ -216,20 +239,36 @@ class SlackArchiveViewer {
         
         // Group messages by thread
         const threadGroups = this.groupMessagesByThread(messages);
+        console.log(`Grouped into ${threadGroups.length} thread groups`);
+        
+        let renderedCount = 0;
+        let threadCount = 0;
+        let regularCount = 0;
         
         threadGroups.forEach(group => {
             if (group.isThread) {
                 this.renderThreadedMessages(group.messages);
+                renderedCount += group.messages.length;
+                threadCount += group.messages.length;
             } else {
                 group.messages.forEach(message => this.renderMessage(message, false, this.searchQuery && this.isSearchResult(message)));
+                renderedCount += group.messages.length;
+                regularCount += group.messages.length;
             }
         });
+        
+        console.log(`Actually rendered ${renderedCount} messages (${threadCount} in threads, ${regularCount} regular)`);
     }
 
     groupMessagesByThread(messages) {
         const groups = [];
         const threadMap = new Map();
+        const processedMessages = new Set();
         
+        console.log(`Grouping ${messages.length} messages by thread`);
+        
+        // First pass: collect all thread replies
+        let threadReplies = 0;
         messages.forEach(message => {
             if (message.thread_ts && message.thread_ts !== message.ts) {
                 // This is a reply in a thread
@@ -237,22 +276,39 @@ class SlackArchiveViewer {
                     threadMap.set(message.thread_ts, []);
                 }
                 threadMap.get(message.thread_ts).push(message);
-            } else {
-                // This is either a top-level message or a thread starter
-                if (message.replies && message.replies.length > 0) {
-                    // Thread starter
-                    const threadMessages = [message];
-                    if (threadMap.has(message.ts)) {
-                        threadMessages.push(...threadMap.get(message.ts));
-                    }
-                    groups.push({ isThread: true, messages: threadMessages });
-                } else {
-                    // Regular message
-                    groups.push({ isThread: false, messages: [message] });
-                }
+                processedMessages.add(message.ts);
+                threadReplies++;
             }
         });
         
+        console.log(`Found ${threadReplies} thread replies`);
+        
+        // Second pass: handle all messages
+        let regularMessages = 0;
+        let threadStarters = 0;
+        
+        messages.forEach(message => {
+            if (processedMessages.has(message.ts)) {
+                // This message was already processed as a thread reply
+                return;
+            }
+            
+            if (message.replies && message.replies.length > 0) {
+                // Thread starter
+                const threadMessages = [message];
+                if (threadMap.has(message.ts)) {
+                    threadMessages.push(...threadMap.get(message.ts));
+                }
+                groups.push({ isThread: true, messages: threadMessages });
+                threadStarters++;
+            } else {
+                // Regular message
+                groups.push({ isThread: false, messages: [message] });
+                regularMessages++;
+            }
+        });
+        
+        console.log(`Grouped into ${regularMessages} regular messages and ${threadStarters} thread starters`);
         return groups;
     }
 
@@ -390,7 +446,16 @@ class SlackArchiveViewer {
     }
 
     hideLoading() {
-        // Loading is hidden when content is rendered
+        const messageContainer = document.getElementById('messageContainer');
+        // Only clear loading if it's still showing the loading spinner
+        if (messageContainer.querySelector('.loading')) {
+            messageContainer.innerHTML = `
+                <div class="welcome-message">
+                    <h3>Archive Loaded Successfully!</h3>
+                    <p>Select a channel from the sidebar to start browsing messages.</p>
+                </div>
+            `;
+        }
     }
 
     buildSearchIndex() {
