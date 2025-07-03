@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Slack Archive Viewer</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Header -->
+        <header class="header">
+            <h1>Slack Archive Viewer</h1>
+            <div class="header-controls">
+                <div class="search-container">
+                    <input type="text" id="searchInput" placeholder="Search messages..." class="search-input">
+                    <div class="search-options">
+                        <label class="search-option">
+                            <input type="checkbox" id="searchAllChannels" checked>
+                            <span>All channels</span>
+                        </label>
+                        <span class="search-count" id="searchCount"></span>
+                    </div>
+                </div>
+                <div class="file-input-container">
+                    <input type="file" id="archiveInput" webkitdirectory directory multiple>
+                    <label for="archiveInput" class="file-input-label">Select Slack Export Directory</label>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <div class="main-content">
+            <!-- Channel Sidebar -->
+            <aside class="channel-sidebar" id="channelSidebar">
+                <div class="sidebar-header">
+                    <h3>Channels</h3>
+                </div>
+                <div class="channel-list" id="channelList">
+                    <div class="loading-message">Select a Slack export directory to begin</div>
+                </div>
+            </aside>
+
+            <!-- Message Area -->
+            <main class="message-area">
+                <div class="message-header" id="messageHeader">
+                    <h2>Select a channel to view messages</h2>
+                </div>
+                <div class="message-container" id="messageContainer">
+                    <div class="welcome-message">
+                        <h3>Welcome to Slack Archive Viewer</h3>
+                        <p>Select a Slack export directory above to start browsing your archived messages.</p>
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html> 
